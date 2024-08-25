@@ -1,0 +1,185 @@
+Steps:
+Update Ec2 Public IPs in frontend and backend .env files
+
+Build Frontend and Backend Images and push to dockerhub.
+
+
+Step 1: Create a Persistent Volume and Persistent Volume Claim for MongoDB
+This will ensure that your MongoDB data is persisted even if the MongoDB pod is restarted.
+
+# mongo-pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongo-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /backend/data # Adjust path based on your Kubernetes environment
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+
+Step 2: Create Deployments and Services
+MongoDB Deployment and Service:
+# mongo-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+spec:
+  selector:
+    matchLabels:
+      app: mongo
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+      - name: mongo
+        image: mongo:latest
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-storage
+          mountPath: /data/db
+      volumes:
+      - name: mongo-storage
+        persistentVolumeClaim:
+          claimName: mongo-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+spec:
+  selector:
+    app: mongo
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+  type: ClusterIP
+
+
+Backend (Node.js) Deployment and Service:
+# backend-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: wanderlust-back-node:v1
+        ports:
+        - containerPort: 5000
+        env:
+        - name: MONGO_URL
+          value: mongodb://mongo:27017
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+
+
+Frontend (React) Deployment and Service:
+# frontend-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: wanderlust-front-react:v2
+        ports:
+        - containerPort: 5173
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  selector:
+    app: frontend
+  ports:
+    - protocol: TCP
+      port: 5173
+      targetPort: 5173
+      nodePort: 32000 # Specify a NodePort between 30000-32767
+  type: NodePort
+
+
+
+Step 3: Deploy to Kubernetes
+Apply the Persistent Volume and Persistent Volume Claim:
+kubectl apply -f mongo-pv.yaml
+
+Deploy MongoDB:
+kubectl apply -f mongo-deployment.yaml
+
+Deploy the Backend:
+kubectl apply -f backend-deployment.yaml
+
+
+Deploy the Frontend:
+kubectl apply -f frontend-deployment.yaml
+
+Step 4: Verify the Deployment
+You can check the status of your deployments with:
+
+kubectl get deployments
+kubectl get pods
+kubectl get services
+
+
+Go to clone code on local and execute this from wanderlust folder:
+kubectl cp ./data/sample_posts.json mongo-57bcfd54bf-6954p:/tmp/sample_posts.json
+
+Execute this from cli from folder of yml files located:
+kubectl exec -it mongo-57bcfd54bf-6954p -- mongoimport --db wanderlust --collection posts --file /tmp/sample_posts.json --jsonArray
