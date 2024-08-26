@@ -30,7 +30,7 @@ spec:
     app: backend
   ports:
     - protocol: TCP
-      port: 5173
-      targetPort: 5173
+      port: 5000
+      targetPort: 5000
       nodePort: 311000 # Specify a NodePort between 30000-32767
   type: NodePort
